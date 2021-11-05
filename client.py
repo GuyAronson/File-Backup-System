@@ -6,8 +6,8 @@ def main():
     if len(sys.argv) != 4:
         sys.exit(1)
     else:
-        ip = sys.argv[1]
-        port = sys.argv[2]
+        port = sys.argv[1]
+        ip = sys.argv[2]
         file_name = sys.argv[3]
 
 
