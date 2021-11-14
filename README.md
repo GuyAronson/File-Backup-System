@@ -3,7 +3,7 @@
       * Wireshark TCP protocol.
       * Using the code from the module.
  Part II:
-      * **Server:**  The cloud.
+       **Server:**  The cloud.
           ** Gets as parameter a port to listen to.
           * Holds List of identities for each client, as well as IPs for different computers
             and backup files.
@@ -12,7 +12,7 @@
           * Can send updates to a client about changes on a different computer.
           * Has a time interval of asking the server if there are any changes.
           
-      * **Client:** Can work from different computers and directories.
+      **Client:** Can work from different computers and directories.
            ** Gets as parameters IP address, Port, directory to a folder, time lap of approaching the server.
             And identity (Optional).
             
