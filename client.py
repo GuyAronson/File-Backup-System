@@ -8,66 +8,89 @@ import os
 
 
 def send_file(directory, s):
-    file = open(directory, "rb")
+    file = open(directory, 'rb')
     chunk = file.read(1024)
     while chunk:
         s.send(chunk)
         chunk = file.read(1024)
+    s.send(b'')
+    file.close()
 
 
-def send_folder(dir, s):
-    files = ""
-    file_cwd = ""
-    os.chdir(os.getcwd() + "/" + dir)
-    for (root, dirs, files) in os.walk(dir, topdown=True):
+def send_folder(directory, s):
+    relative_directory = ""
+    # Saving the start index of the relative directory
+    start_relative_index = len(os.getcwd())+1
+    last_slash = directory.rindex("/")
+    if last_slash != -1:
+        # Getting the realtive directory starting from the first folder to save.
+        relative_directory = directory[:last_slash]
+        # Changing directory to the realtive directory.
+        os.chdir(os.getcwd() + "/" + relative_directory)
+    #current_dir = os.getcwd()
+    for (root, dirs, files) in os.walk(os.getcwd(), topdown=True):
         # Sending the root directory.
-        s.send(bytes(root))
+        root_last_slash = root.rindex('/')
+        print(root[start_relative_index : root_last_slash])
+        s.send(root[start_relative_index : root_last_slash].encode())
 
         # Changing to the current directory.
-        root_cwd = dir
-        first_slash = root.findfirstindex('/')
-        if first_slash != -1:
-            root_cwd += root[first_slash+1:]
+        #root_cwd = current_dir
+        #root_last_index = root.rindex('/')
+        #if root_last_index != -1:
+        #    root_cwd += root[:root_last_index]
+        #root_cwd = os.getcwd()
         # Sending the files.
         for file in files:
-            file_cwd = root_cwd + "/" + file
+            file_cwd = root + "/" + file
+            print(file_cwd)
             send_file(file_cwd, s)
 
 
-port = sys.argv[0]
-ip = sys.argv[1]
-directory = sys.argv[2]
-time_seconds = sys.argv[3]
+port = int(sys.argv[1])
+ip = sys.argv[2]
+directory = sys.argv[3]
+time_seconds = sys.argv[4]
 ID = ""
-if len(sys.argv) == 5:
-    ID = sys.argv[4]
-
-# todo- The client will send a 1 or 0 as a key - to know whether is it a file or a directory to back up on the server.
-# after registaration in the server - the client will monitor the files - using watchdog
-# When a change has been made - the client will send a request for backup to the server.
+if len(sys.argv) == 6:
+    ID = sys.argv[5]
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 client_socket.connect((ip, port))
 
 if ID != "":
-    client_socket.send(bytes(ID))
-    x = client_socket.recv(1024)
+    client_socket.send(ID.encode())
+    x = (client_socket.recv(1024)).decode()
     if ID != x:  # Throw exception.
         pass
-    client_socket.send(bytes(directory))
-else:
-    client_socket.send(bytes(directory))
-    ID = client_socket.recv(1024)
 
-# Check if the directory is a file or a folder.
-if os.path.isdir(directory):
-    # Key = 0 means that this directory is a folder.
-    d = ("0" + directory)
-    client_socket.send(bytes(d))
-    send_folder()
-elif os.path.isfile(directory):
-    # Key = 1 means that this directory is a folder.
-    d = ("1" + directory)
-    client_socket.send(bytes(d))
-    send_file(directory, client_socket)
+    # Check if the directory is a file or a folder.
+    if os.path.isdir(directory):
+        # Key = 0 means that this directory is a folder.
+        d = ("0" + directory)
+        client_socket.send(d.encode())
+        send_folder(directory, client_socket)
+    elif os.path.isfile(directory):
+        # Key = 1 means that this directory is a folder.
+        d = ("1" + directory)
+        client_socket.send(d.encode())
+        send_file(directory, client_socket)
+
+# If ID does not exist.
+else:
+    if os.path.isdir(directory):
+        # Key = 0 means that this directory is a folder.
+        d = ("0" + directory)
+        client_socket.send(d.encode())
+        ID = (client_socket.recv(1024)).decode()
+        send_folder(directory, client_socket)
+    elif os.path.isfile(directory):
+        # Key = 1 means that this directory is a folder.
+        d = ("1" + directory)
+        client_socket.send(d.encode())
+        ID = (client_socket.recv(1024)).decode()
+        send_file(directory, client_socket)
+
+
+
