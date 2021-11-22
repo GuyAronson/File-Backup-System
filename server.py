@@ -38,7 +38,7 @@ while True:
     os.chdir(origin_cwd + "/" + id)    # Changing the current working directory
 
     is_dir = data[0]	# If the key is 0 - then it's a directory, if it's 1 then it's a file.
-    path += data[1:]    # The relative directory with out the key.
+    path = data[1:]    # The relative directory with out the key.
 
     last_slash_index = path.rfind("/")
 
@@ -48,25 +48,25 @@ while True:
     	#create a relative directory 1 step before the final one.
     	os.makedirs(path[:last_slash_index])
     	# Changing the current working directory
-		os.chdir(origin_cwd + "/" + path[:last_slash_index])  
+		os.chdir(origin_cwd + "/" + path[:last_slash_index])
 
 	dir_name = path[last_slash_index + 1:] 
     if is_dir == 0:
     	# todo - back up the entire folder.
-    	recv_folder(dir_name, client_socket, client_address)
-    else:
+    	recv_folder(client_socket)
+    elif is_dir == 1:
     	# todo - create & backup file.
     	# Removing the exisiting file
     	if os.path.exists(dir_name):
     		os.remove(dir_name)
-    	recv_file(dir_name, client_socket, client_address)
+    	recv_file(dir_name, client_socket)
 
     
     client_socket.close()
-    print('Client disconnected')
+	print('Client disconnected')
 
 #Function to recieve a single file.
-def recv_file(file_name, client_socket, client_address):
+def recv_file(file_name, client_socket):
 	# Open the file.
 	file = open(file_name, 'wb')
 	# Getting the first chunk of bytes.
@@ -78,8 +78,7 @@ def recv_file(file_name, client_socket, client_address):
 	file.close()
 
 # Function to recieve a folder and its sub-directories.
-def recv_folder(dir_name, client_socket, client_address):
-	is_dir = 0
+def recv_folder(client_socket):
 	dir_name = ""
 	# Saving the original working directory.
 	cwd = os.getcwd()
@@ -98,7 +97,7 @@ def recv_folder(dir_name, client_socket, client_address):
 		data = client_socket.recv(1024)
 		
 		# Checks if the client stopped sending info.
-		if !data:
+		if not data:
 			break
 
 		# Extracting the key & the directory name	
