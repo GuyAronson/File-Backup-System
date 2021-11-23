@@ -64,7 +64,7 @@ def recv_folder(client_socket):
                 is_dir = int(data[0])
                 dir_name = cwd + "/" + data[1:]
             else:
-                break
+                is_dir = 0
 #########################################
 
 port = sys.argv[0]
@@ -128,4 +128,5 @@ while True:
 
     
     client_socket.close()
+    os.chdir(origin_cwd)
     print('Client disconnected')
