@@ -6,44 +6,54 @@ from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
 import os
 
+def wait_for_ack(s):
+    data = "0"
+    while data != "ack":
+        data = s.recv(3).decode()
+
 
 def send_file(directory, s):
+    # Get the file size in bytes
+    file_size = os.path.getsize(directory)
+    # Send the size of the file to the server
+    bytes = file_size.to_bytes(8, 'big')
+    s.send(bytes)
+    # Open & read the file
     file = open(directory, 'rb')
-    chunk = file.read(1024)
-    while chunk:
-        s.send(chunk)
-        chunk = file.read(1024)
-    s.send(b'')
+    data = file.read(file_size)
+    # Send all.
+    s.sendall(data)
+    # while chunk:
+    #     s.send(chunk)
+    #     chunk = file.read(1024)
+    # s.send(b'')
     file.close()
 
 
 def send_folder(directory, s):
-    relative_directory = ""
     # Saving the start index of the relative directory
-    start_relative_index = len(os.getcwd())+1
+    start_relative_index =0
+    cwd = os.getcwd()
     last_slash = directory.rindex("/")
     if last_slash != -1:
-        # Getting the realtive directory starting from the first folder to save.
-        relative_directory = directory[:last_slash]
         # Changing directory to the realtive directory.
-        os.chdir(os.getcwd() + "/" + relative_directory)
-    #current_dir = os.getcwd()
+        os.chdir(os.getcwd() + "/" + directory)
+        cwd = os.getcwd()
+        start_relative_index = len(cwd)-1 # start from B
     for (root, dirs, files) in os.walk(os.getcwd(), topdown=True):
         # Sending the root directory.
-        root_last_slash = root.rindex('/')
-        print(root[start_relative_index : root_last_slash])
-        s.send(root[start_relative_index : root_last_slash].encode())
+        a = ("0"+root[start_relative_index:])
+        s.send(a.encode())
+        wait_for_ack(s)
 
-        # Changing to the current directory.
-        #root_cwd = current_dir
-        #root_last_index = root.rindex('/')
-        #if root_last_index != -1:
-        #    root_cwd += root[:root_last_index]
-        #root_cwd = os.getcwd()
         # Sending the files.
         for file in files:
+            relative_file_cwd = root[start_relative_index:] + "/" + file
             file_cwd = root + "/" + file
+            # Sending the relative file directory to the server.
+            s.send(("1" + relative_file_cwd).encode())
             print(file_cwd)
+            wait_for_ack(s)
             send_file(file_cwd, s)
 
 
@@ -57,7 +67,7 @@ if len(sys.argv) == 6:
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-client_socket.connect((ip, port))
+client_socket.connect((ip, 12346))
 
 if ID != "":
     client_socket.send(ID.encode())

@@ -8,53 +8,61 @@ import os
 
 
 # Function to recieve a single file.
-def recv_file(file_name, client_socket):
+def recv_file(file_dir, client_socket):
+    file_size = int.from_bytes(client_socket.recv(8), 'big')
     # Open the file.
-    file = open(file_name, 'wb')
+    file = open(file_dir, 'wb')
     # Getting the first chunk of bytes.
-    chunk = client_socket.recv(1024)
-    while chunk != b'':
-        # Writing the bytes while the chunk isn't empty.
-        print(chunk)
-        file.write(chunk)
-        chunk = client_socket.recv(1024)
+    data = client_socket.recv(file_size)
+    file.write(data)
+    # while chunk != b'':
+    #     # Writing the bytes while the chunk isn't empty.
+    #     print(chunk)
+    #     file.write(chunk)
+    #     chunk = client_socket.recv(1024)
     file.close()
 
 
 # Function to recieve a folder and its sub-directories.
+############### Change the recieve bytes ###################
 def recv_folder(client_socket):
     # Saving the original working directory.
-    cwd = os.getcwd()
-    # First root recieve.
+    cwd = os.getcwd()   # in A/
+    # First, recieve relative root directory .
     data = client_socket.recv(1024).decode()
-    dir_name = data
-    while data:
-
-        # Got the root path of the directory
+    client_socket.send(("ack").encode())
+    dir_name = cwd +"/"+ data[1:]
+    while data != "":
+        # dir_name = dir_name.rstrip()
+        # dir_name = dir_name.lstrip()
+        # Got the full root's path
         os.makedirs(dir_name)
-        # Change working directory.
+        # Change working directory to the full root's path
         os.chdir(dir_name)
 
-        # Getting the first file/folder directory.
+        # Getting the first file/folder relative directory.
         data = client_socket.recv(1024).decode()
-
+        client_socket.send(("ack").encode())
+        data = data.rstrip()
+        data = data.lstrip()
         # Checks if the client stopped sending info.
-        if data != "":
+        if data == "":
             break
 
         # Extracting the key & the directory name
         is_dir = int(data[0])
-        dir_name = data[1:]
+        dir_name = cwd +"/"+ data[1:]
 
         # Running while there are files in the directory.
         while is_dir == 1:
             # Getting the file.
             recv_file(dir_name, client_socket)
-            # Getting the next file/folder name
+            # Getting the next file/folder realtive directory
             data = client_socket.recv(1024).decode()
-            is_dir = data[0]
-            dir_name = data[1:]
-        data = dir_name
+            client_socket.send(("ack").encode())
+            if data != "":
+                is_dir = int(data[0])
+                dir_name = cwd + "/" + data[1:]
 #########################################
 
 port = sys.argv[0]
@@ -64,13 +72,15 @@ id_list = []
 path = ""
 ID = ""
 data = ""
-#is_dir = 0
 origin_cwd = os.getcwd()
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('', 12345))
+server.bind(('', 12346))
 server.listen(5)
 while True:
+    path = ""
+    ID = ""
+
     client_socket, client_address = server.accept()
     data = client_socket.recv(1024).decode()
 
