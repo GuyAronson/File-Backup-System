@@ -59,10 +59,12 @@ def recv_folder(client_socket):
             recv_file(dir_name, client_socket)
             # Getting the next file/folder realtive directory
             data = client_socket.recv(1024).decode()
-            client_socket.send(("ack").encode())
             if data != "":
+                client_socket.send(("ack").encode())
                 is_dir = int(data[0])
                 dir_name = cwd + "/" + data[1:]
+            else:
+                break
 #########################################
 
 port = sys.argv[0]

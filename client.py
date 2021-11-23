@@ -6,6 +6,7 @@ from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
 import os
 
+
 def wait_for_ack(s):
     data = "0"
     while data != "ack":
@@ -34,12 +35,12 @@ def send_folder(directory, s):
     # Saving the start index of the relative directory
     start_relative_index =0
     cwd = os.getcwd()
-    last_slash = directory.rindex("/")
-    if last_slash != -1:
-        # Changing directory to the realtive directory.
-        os.chdir(os.getcwd() + "/" + directory)
-        cwd = os.getcwd()
-        start_relative_index = len(cwd)-1 # start from B
+    #last_slash = directory.rfind("/")
+    #if last_slash != -1:
+   # Changing directory to the realtive directory.
+    os.chdir(os.getcwd() + "/" + directory)
+    cwd = os.getcwd()
+    start_relative_index = len(cwd)-1
     for (root, dirs, files) in os.walk(os.getcwd(), topdown=True):
         # Sending the root directory.
         a = ("0"+root[start_relative_index:])
