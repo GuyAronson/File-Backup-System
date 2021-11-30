@@ -103,25 +103,8 @@ def send_folder(directory, s):
 # todo - the server needs to complete the same change.
 # todo - then the server needs to do the changes in the other computers in the same id.
 # the server does the change only when a computer logs in,
-# and save the change for the other computer when they log in.
+# and save the change for the other computers when they log in.
 # The server will hold the changes to do per computer in a specific buffer per computer.
-#
-# The server will hold a map that maps from id to another map (of computers)
-# the inner map, will map from a computer (with a serial number) -
-# to a changes needs to be done.
 
 
-def on_moved(event):
-    pass
 
-
-def on_created(event):
-    pass
-
-
-def on_modified(event):
-    pass
-
-
-def on_deleted(event):
-    pass

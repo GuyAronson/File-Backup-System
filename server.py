@@ -7,7 +7,8 @@ from utils import *
 
 port = sys.argv[1]
 
-id_list = []
+# Dictionary - its key is the id and the value is another dict of computers & list of commands.
+users = {}
 
 path = ""
 ID = ""
@@ -23,12 +24,14 @@ while True:
 
     client_socket, client_address = server.accept()
     data = client_socket.recv(1024).decode()
-
+    id_list = users.keys()
     # if id is not in id_list - create random one and send it.
     if data not in id_list:
         # Create a random id.
         ID = ''.join((random.choices(string.ascii_lowercase + string.digits, k=128)))
-        id_list.append(ID)
+        # Creating new dict for the specific user ID
+        users[data] = {}
+        # Create the folder with the ID
         os.mkdir(ID)
         client_socket.send(ID.encode()) # Sending an acknowledgment
         os.chdir(os.path.join(origin_cwd, ID)) # Changing the current working directory
@@ -50,7 +53,7 @@ while True:
             recv_folder(client_socket)
         elif is_dir == 1:
             # create & backup file.
-            # Removing the exisiting file
+            # Removing the existing file
             print(os.getcwd())
             if os.path.exists(dir_name):
                 os.remove(dir_name)
@@ -59,7 +62,7 @@ while True:
     # ID is in the list - the client is already registered.
     else:
         ID = data
-        client_socket.send(("ack").encode())  # Sending an acknowledgment.
+        client_socket.send("ack".encode())  # Sending an acknowledgment.
         send_folder(os.path.join(os.getcwd(), ID), client_socket)
 
     client_socket.close()

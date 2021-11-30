@@ -14,6 +14,34 @@ ID = ""
 if len(sys.argv) == 6:
     ID = sys.argv[5]
 
+
+def on_moved(event):
+    src_path = event.src_path
+    dst_path = event.dst_path
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((ip, 12345))
+    s.send("Move".encode())
+
+def on_created(event):
+    path = event.src_path
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((ip, 12345))
+    s.send("Create".encode())
+
+def on_modified(event):
+    path = event.src_path
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((ip, 12345))
+    s.send("Modify".encode())
+
+def on_deleted(event):
+    path = event.src_path
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((ip, 12345))
+    s.send("Delete".encode())
+
+
+
 origin_cwd = os.getcwd()
 had_id = False
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -27,8 +55,6 @@ if ID != "":
     wait_for_ack(client_socket)
     # Recieving the folder.
     recv_folder(client_socket)
-    # Getting back the start directory.
-    os.chdir(origin_cwd)
 
 # If ID does not exist.
 else:
@@ -45,6 +71,10 @@ else:
         client_socket.send(d.encode())
         ID = (client_socket.recv(1024)).decode()
         send_file(directory, client_socket)
+
+# Getting back the start directory.
+os.chdir(origin_cwd)
+client_socket.close()
 
 observer = Observer()
 event_handler = FileSystemEventHandler()
