@@ -33,6 +33,13 @@ def on_created(event):
     s.send((user_id+"/"+computer_id).encode())
     wait_for_ack(s)
     s.send(path.encode())
+    wait_for_ack(s)
+
+    ######### Need to check if the path is a full or realtive one - debug #############
+    if os.path.isdir(path):
+        send_folder(path, s)
+    elif os.path.isfile(path):
+        send_file(path, s)
 
 
 def on_modified(event):
@@ -47,6 +54,11 @@ def on_deleted(event):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((ip, 12345))
     s.send("Delete".encode())
+    wait_for_ack(s)
+    s.send((user_id+"/"+computer_id).encode())
+    wait_for_ack(s)
+    s.send(path.encode())
+
 
 
 origin_cwd = os.getcwd()
