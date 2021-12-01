@@ -10,9 +10,10 @@ port = int(sys.argv[1])
 ip = sys.argv[2]
 directory = sys.argv[3]
 time_seconds = sys.argv[4]
-ID = ""
+user_id = ""
+computer_id = '0'
 if len(sys.argv) == 6:
-    ID = sys.argv[5]
+    user_id = sys.argv[5]
 
 
 def on_moved(event):
@@ -22,17 +23,24 @@ def on_moved(event):
     s.connect((ip, 12345))
     s.send("Move".encode())
 
+
 def on_created(event):
     path = event.src_path
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((ip, 12345))
     s.send("Create".encode())
+    wait_for_ack(s)
+    s.send((user_id+"/"+computer_id).encode())
+    wait_for_ack(s)
+    s.send(path.encode())
+
 
 def on_modified(event):
     path = event.src_path
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((ip, 12345))
     s.send("Modify".encode())
+
 
 def on_deleted(event):
     path = event.src_path
@@ -41,18 +49,19 @@ def on_deleted(event):
     s.send("Delete".encode())
 
 
-
 origin_cwd = os.getcwd()
 had_id = False
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client_socket.connect((ip, 12345))
 
-if ID != "":
+if user_id != "":
     had_id = True
     # Sending the ID
-    client_socket.send(ID.encode())
-    # Waiting for ack
-    wait_for_ack(client_socket)
+    client_socket.send(user_id.encode())
+
+    computer_id = client_socket.recv(10)
+    # Sending ack
+    client_socket.send("ack".encode())
     # Recieving the folder.
     recv_folder(client_socket)
 
@@ -63,13 +72,21 @@ else:
         # Key = 0 means that this directory is a folder.
         d = ("0" + directory)
         client_socket.send(d.encode())
-        ID = (client_socket.recv(1024)).decode()
+        user_id = (client_socket.recv(1024)).decode()
+        # Cutting the computer id from the total id.
+        i = user_id.rfind("/")
+        computer_id = user_id[i+1:]
+        user_id = user_id[:i]
         send_folder(directory, client_socket)
     elif os.path.isfile(directory):
         # Key = 1 means that this directory is a folder.
         d = ("1" + directory)
         client_socket.send(d.encode())
-        ID = (client_socket.recv(1024)).decode()
+        user_id = (client_socket.recv(1024)).decode()
+        # Cutting the computer id from the total id.
+        i = user_id.rfind("/")
+        computer_id = user_id[i+1:]
+        user_id = user_id[:i]
         send_file(directory, client_socket)
 
 # Getting back the start directory.
@@ -83,7 +100,7 @@ event_handler.on_created = on_created
 event_handler.on_modified = on_modified
 event_handler.on_deleted = on_deleted
 if had_id:
-    observer.schedule(event_handler, ID, recursive=True)
+    observer.schedule(event_handler, user_id, recursive=True)
 else:
     observer.schedule(event_handler, directory, recursive=True)
 observer.start()
@@ -94,4 +111,3 @@ while True:
     except KeyboardInterrupt:
         observer.stop()
         observer.join()
-
