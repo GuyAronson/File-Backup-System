@@ -5,6 +5,7 @@ import string
 import sys
 from utils import *
 
+
 def create(s, path):
     # if is_dir = 0 , it;s a directory, if is_dir =1 it's a file.
     is_dir = path[0]
@@ -13,19 +14,40 @@ def create(s, path):
     if is_dir == 1:
         recv_file(directory, s)
     elif is_dir == 0:
-        recv_folder(s)
+        # path is a relative directory - start from the ID folder
+        # todo - Need to make sure the server current working directory (cwd) is in the ID folder.
+        os.mkdir(os.path.join(os.getcwd(), path))
 
 def modify(path, bytes):
     pass
 
-def delete(s, path):
-    pass
+
+def delete(path):
+    # path is a relative path.
+    full_path = os.path.join(os.getcwd(), path)
+    list_dirs = os.listdir(full_path)
+
+    # Checks if the folder is empty
+    if len(list_dirs) == 0:
+        return
+
+    for file in list_dirs:
+        full_dir_path = os.path.join(full_path, file)
+        if os.path.isfile(full_dir_path):
+            os.remove(full_dir_path)
+            # todo - can we remove nodes in list while running on it.
+            list_dirs.remove(file)
+
+    for folder in list_dirs:
+        delete(os.path.join(path, folder))
+        os.rmdir(os.path.join(full_path, folder))
 
 def move(s, src_path, dst_path):
     pass
 
+
 def execute_commands(s, usr_id, cmp_id):
-    # List with size 2, updates[0] = modify updates, updates[1] = the rest.
+    # List with size 2, updates[0] = (map)modify updates, updates[1] = (list)the rest.
     updates = users[usr_id][cmp_id]
 
     # Checks the modify map.
@@ -39,69 +61,89 @@ def execute_commands(s, usr_id, cmp_id):
             s.send(update.encode())
             wait_for_ack(s)
             # Send the bytes of the modified path.
-            s.send(updates[0][update])
-
+            s.sendall(updates[0][update])
+            wait_for_ack(s)
             # Deleting the update from the map
             del updates[0][update]
+
     # Checks the other updates map.
     if len(updates[1]) != 0:
         # Looping over the other updates list.
         for update in updates[1]:
             i = update.find("/")
             command = update[:i]
-            _path = update[i+1:]
+            _path = update[i + 1:]
             # Send the command name
             s.send(command.encode())
             wait_for_ack(s)
             # Send the path to create.
+            # todo Path will hold a '0' or '1' on the first byte to distinguish folder ot file
             s.send(_path.encode())
             wait_for_ack(s)
             if command == "Create":
                 # Send the folder/file
-                if os.path.isdir(_path):
-                    send_folder(_path, s)
-                elif os.path.isfile(_path):
+                # if os.path.isdir(_path):
+                #   send_folder(_path, s)
+                if os.path.isfile(_path):
+                    # todo The client will get the bytes of the file to create.
                     send_file(_path, s)
+
             elif command == "Move":
                 # path_slash is the index of the slash between src_path and dst_path
                 path_slash = _path.find("/")
                 dst_path = _path[path_slash + 1:]
-                s.end(dst_path.encode())
-                # The client does the move itself.
-
+                s.send(dst_path.encode())
+                # todo  - The client does the move itself from the src to dst.
 
             # Remove the update (has been done)
             updates[1].remove(update)
 
 
-
+# 1. Recieve new data - V
+# 2. Execute commands waiting in the buffer - execute_commands V
+# 3. Execute the change from the client - create/modify/delete/move
+# 4. Pushing this change to all computers buffers
+#### The paths have to be realtive.
 def before_create(s, usr_id, cmp_id):
-    path  = s.recv(1024)
+    # todo - The path from the client will hold '1' or '0' in the first byte - for the directory type
+    path = s.recv(1024)
     s.send("ack".encode())
+    # Execute commands waiting in the buffer
     execute_commands(s, usr_id, cmp_id)
 
-
-
-
+    # Execute the change from the client:
+    create(s, path)
 
 
 def before_delete(s, usr_id, cmp_id):
-    updates = users[usr_id][cmp_id]
+    # todo - The path from the client will hold '1' or '0' in the first byte - for the directory type
+    path = s.recv(1024)
+    s.send("ack".encode())
+    # Execute commands waiting in the buffer
+    execute_commands(s, usr_id, cmp_id)
+
+    delete(path)
+
+    # Deleting the folder since it's empty.
+    os.rmdir(os.path.join(os.getcwd(), path))
+
 
 def before_move(s):
     pass
 
+
 def before_modify(s):
     pass
 
+
 def check_for_updates(update, s):
+    # todo - When implementing the client - start running chronological from here.
     s.send("ack".encode())
     data = s.recv(1024)
     s.send("ack".encode())
     i = data.rfind("/")
     user_id = data[:i]
     computer_id = data[i + 1:]
-    s.send("ack".encode())
 
     if update == "Create":
         before_create(s, user_id, computer_id)
