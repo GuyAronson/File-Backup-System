@@ -18,32 +18,79 @@ def create(s, path):
         # todo - Need to make sure the server current working directory (cwd) is in the ID folder.
         os.mkdir(os.path.join(os.getcwd(), path))
 
-def modify(path, bytes):
-    pass
+
+def modify(s, path):
+    send_file(path, s)
 
 
 def delete(path):
     # path is a relative path.
     full_path = os.path.join(os.getcwd(), path)
     list_dirs = os.listdir(full_path)
+    list_copy = list_dirs.copy()
 
     # Checks if the folder is empty
     if len(list_dirs) == 0:
         return
 
-    for file in list_dirs:
+    for file in list_copy:
         full_dir_path = os.path.join(full_path, file)
         if os.path.isfile(full_dir_path):
             os.remove(full_dir_path)
-            # todo - can we remove nodes in list while running on it.
             list_dirs.remove(file)
 
     for folder in list_dirs:
         delete(os.path.join(path, folder))
         os.rmdir(os.path.join(full_path, folder))
 
-def move(s, src_path, dst_path):
-    pass
+
+def move_file(full_src_path, full_dst_path):
+    src_file = open(full_src_path, 'rb')
+    # Concatenating the cwd with the src_path and get the file size.
+    size = os.path.getsize(full_src_path)
+    # Read file
+    bytes = src_file.read(size)
+    src_file.close()
+    # Creating the file in dst_path and write the bytes in it.
+    dst_file = open(full_dst_path, 'wb')
+    dst_file.write(bytes)
+    dst_file.close()
+    os.remove(full_src_path)
+
+
+def move(src_path, dst_path):
+    # Getting the full paths for src and dst paths.
+    full_src_path = os.path.join(os.getcwd(), src_path)
+    full_dst_path = os.path.join(os.getcwd(), dst_path)
+    # Checks if we need to move a folder or a file.
+    if os.path.isdir(full_src_path):
+        # If it is a folder - create it in dst address.
+        os.mkdir(full_dst_path)
+        # Getting the list of files/folders in it the current folder.
+        list_dirs = os.listdir(full_src_path)
+        # Checks if the folder is empty
+        if len(list_dirs) == 0:
+            return
+
+        # Looping over the items
+        for dir in list_dirs:
+            # Creating the full path of the item.
+            dir_path = os.path.join(full_src_path, dir)
+            # If it is a file - call move_file - will delete the file in the end of the func.
+            if os.path.isfile(dir_path):
+                move_file(full_src_path, full_dst_path)
+            # If it's a folder - recursively get call move with the realtive paths.
+            elif os.path.isdir(dir_path):
+                relative_src = os.path.join(src_path, dir)
+                relative_dst = os.path.join(dst_path, dir)
+                move(relative_src, relative_dst)
+                # Eventually - delete the folder, it must be empty after the recursion.
+                os.rmdir(os.path.join (full_src_path, dir))
+
+    # If the path is a file from the beginning- we will just call move_file
+    # will copy the file from src to dst, and will delete from the src.
+    elif os.path.isfile(full_src_path):
+        move_file(full_src_path, full_dst_path)
 
 
 def execute_commands(s, usr_id, cmp_id):
@@ -102,7 +149,7 @@ def execute_commands(s, usr_id, cmp_id):
 # 1. Recieve new data - V
 # 2. Execute commands waiting in the buffer - execute_commands V
 # 3. Execute the change from the client - create/modify/delete/move
-# 4. Pushing this change to all computers buffers
+# 4. Pushing this change to all computers buffers #####
 #### The paths have to be realtive.
 def before_create(s, usr_id, cmp_id):
     # todo - The path from the client will hold '1' or '0' in the first byte - for the directory type
@@ -128,31 +175,63 @@ def before_delete(s, usr_id, cmp_id):
     os.rmdir(os.path.join(os.getcwd(), path))
 
 
-def before_move(s):
-    pass
+def before_move(s, usr_id, cmp_id):
+    src_path = s.recv(1024)
+    s.send("ack".encode())
+    dst_path = s.recv(1024)
+    s.send("ack".encode())
+
+    # Execute commands waiting in the buffer
+    execute_commands(s, usr_id, cmp_id)
+
+    move(src_path, dst_path)
 
 
-def before_modify(s):
-    pass
+def before_modify(s, usr_id, cmp_id):
+    # todo - The path from the client will hold '1' or '0' in the first byte - for the directory type
+    # We will get the path first
+    path = s.recv(1024)
+    s.send("ack".encode())
+    # Execute commands waiting in the buffer
+    execute_commands(s, usr_id, cmp_id)
+    # Eventually will send the modified file.
+    send_file(path,s)
+
+def before_rename(s, usr_id, cmp_id):
+    # Getting the src path to change
+    src_path = s.recv(1024)
+    s.send("ack".encode())
+    # Getting the new name:
+    name = s.recv(1024)
+    s.send("ack".encode())
+    # Execute commands waiting in the buffer
+    execute_commands(s, usr_id, cmp_id)
+
+    # Renaming the file/folder.
+    os.rename(src_path, name)
 
 
 def check_for_updates(update, s):
+    commands = ["Create", "Move", "Modify", "Delete", "Remove"]
     # todo - When implementing the client - start running chronological from here.
-    s.send("ack".encode())
-    data = s.recv(1024)
-    s.send("ack".encode())
-    i = data.rfind("/")
-    user_id = data[:i]
-    computer_id = data[i + 1:]
+    if update in commands:
+        s.send("ack".encode())
+        data = s.recv(1024)
+        s.send("ack".encode())
+        i = str(data).rfind("/")
+        user_id = str(data)[:i]
+        computer_id = str(data)[i + 1:]
 
-    if update == "Create":
-        before_create(s, user_id, computer_id)
-    if update == "Move":
-        pass
-    if update == "Modify":
-        pass
-    if update == "Delete":
-        before_delete(s, user_id, computer_id)
+        if update == "Create":
+            before_create(s, user_id, computer_id)
+        if update == "Move":
+            before_move(s, user_id, computer_id)
+        if update == "Modify":
+            pass
+        if update == "Delete":
+            before_delete(s, user_id, computer_id)
+        if update == "Rename":
+            before_rename(s, user_id, computer_id)
 
 
 port = sys.argv[1]
@@ -165,7 +244,7 @@ data = ""
 origin_cwd = os.getcwd()
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('', 12345))
+server.bind(('', 12347))
 server.listen(5)
 while True:
     path = ""
@@ -183,11 +262,11 @@ while True:
         # Create a random id.
         user_id = ''.join((random.choices(string.ascii_lowercase + string.digits, k=128)))
         # Creating new dict for the specific user ID
-        users[data] = {}
+        users[user_id] = {}
         # This is the first computer - the id is 1
         computer_id = '1'
         # Creating new dict for the  commands - commands[0]=modify commands, commands[1]= the rest commands.
-        users[data][computer_id] = [{}, []]
+        users[user_id][computer_id] = [{}, []]
         # Create the folder with the ID
         os.mkdir(user_id)
         # Sending an acknowledgment with the user_id and the computer_id
