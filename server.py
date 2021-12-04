@@ -20,6 +20,8 @@ def create(s, path):
 
 
 def modify(s, path):
+    # Get the full path.
+    os.path.join(os.getcwd(), path)
     send_file(path, s)
 
 
@@ -94,144 +96,98 @@ def move(src_path, dst_path):
 
 
 def execute_commands(s, usr_id, cmp_id):
-    # List with size 2, updates[0] = (map)modify updates, updates[1] = (list)the rest.
+    # List of updates for the computer.
     updates = users[usr_id][cmp_id]
 
-    # Checks the modify map.
-    if len(updates[0].keys()) != 0:
-        # Looping over the modify map.
-        for update in updates[0].keys():
-            # Send the command name to the client
-            s.send("Modify".encode())
-            wait_for_ack(s)
-            # Send the path to the client.
-            s.send(update.encode())
-            wait_for_ack(s)
-            # Send the bytes of the modified path.
-            s.sendall(updates[0][update])
-            wait_for_ack(s)
-            # Deleting the update from the map
-            del updates[0][update]
-
-    # Checks the other updates map.
-    if len(updates[1]) != 0:
-        # Looping over the other updates list.
-        for update in updates[1]:
+    # Checks the updates list.
+    if len(updates) != 0:
+        # Looping over the updates.
+        for update in updates:
             i = update.find("/")
             command = update[:i]
             _path = update[i + 1:]
             # Send the command name
             s.send(command.encode())
             wait_for_ack(s)
-            # Send the path to create.
-            # todo Path will hold a '0' or '1' on the first byte to distinguish folder ot file
+            # Send the path to create - ## the first byte is the path's type##
             s.send(_path.encode())
             wait_for_ack(s)
-            if command == "Create":
+            if command == "Create" or command == "Modify":
                 # Send the folder/file
-                # if os.path.isdir(_path):
-                #   send_folder(_path, s)
-                if os.path.isfile(_path):
-                    # todo The client will get the bytes of the file to create.
-                    send_file(_path, s)
+                is_dir = _path[0]
+                if is_dir == 1:
+                    send_file(_path[1:], s)
+            # If command is "Move" - the client needs to seperate the paths ###
 
-            elif command == "Move":
-                # path_slash is the index of the slash between src_path and dst_path
-                path_slash = _path.find("/")
-                dst_path = _path[path_slash + 1:]
-                s.send(dst_path.encode())
-                # todo  - The client does the move itself from the src to dst.
+            # Might need to send ack after every update. ####
+            # Remove the update (the update has been done)
+            users[usr_id][cmp_id].remove(update)
 
-            # Remove the update (has been done)
-            updates[1].remove(update)
-
-
-# 1. Recieve new data - V
-# 2. Execute commands waiting in the buffer - execute_commands V
-# 3. Execute the change from the client - create/modify/delete/move
-# 4. Pushing this change to all computers buffers #####
-#### The paths have to be realtive.
-def before_create(s, usr_id, cmp_id):
-    # todo - The path from the client will hold '1' or '0' in the first byte - for the directory type
-    path = s.recv(1024)
-    s.send("ack".encode())
-    # Execute commands waiting in the buffer
-    execute_commands(s, usr_id, cmp_id)
-
-    # Execute the change from the client:
-    create(s, path)
-
-
-def before_delete(s, usr_id, cmp_id):
-    # todo - The path from the client will hold '1' or '0' in the first byte - for the directory type
-    path = s.recv(1024)
-    s.send("ack".encode())
-    # Execute commands waiting in the buffer
-    execute_commands(s, usr_id, cmp_id)
-
-    delete(path)
-
-    # Deleting the folder since it's empty.
-    os.rmdir(os.path.join(os.getcwd(), path))
-
-
-def before_move(s, usr_id, cmp_id):
-    src_path = s.recv(1024)
-    s.send("ack".encode())
-    dst_path = s.recv(1024)
-    s.send("ack".encode())
-
-    # Execute commands waiting in the buffer
-    execute_commands(s, usr_id, cmp_id)
-
-    move(src_path, dst_path)
-
-
-def before_modify(s, usr_id, cmp_id):
-    # todo - The path from the client will hold '1' or '0' in the first byte - for the directory type
-    # We will get the path first
-    path = s.recv(1024)
-    s.send("ack".encode())
-    # Execute commands waiting in the buffer
-    execute_commands(s, usr_id, cmp_id)
-    # Eventually will send the modified file.
-    send_file(path,s)
-
-def before_rename(s, usr_id, cmp_id):
-    # Getting the src path to change
-    src_path = s.recv(1024)
-    s.send("ack".encode())
-    # Getting the new name:
-    name = s.recv(1024)
-    s.send("ack".encode())
-    # Execute commands waiting in the buffer
-    execute_commands(s, usr_id, cmp_id)
-
-    # Renaming the file/folder.
-    os.rename(src_path, name)
-
+        # All updates have been sent, the client can stop.
+        s.send("Done".encode())
 
 def check_for_updates(update, s):
-    commands = ["Create", "Move", "Modify", "Delete", "Remove"]
+    commands = ["Create", "Move", "Modify", "Delete", "Rename"]
+    command_text = ""
     # todo - When implementing the client - start running chronological from here.
     if update in commands:
+        command_text = update
+
+        # Ack for receiving the update
         s.send("ack".encode())
+
+        # Get the ids:
         data = s.recv(1024)
         s.send("ack".encode())
         i = str(data).rfind("/")
         user_id = str(data)[:i]
         computer_id = str(data)[i + 1:]
 
+        # Getting the path - the first byte is the dir's type.
+        path = s.recv(1024)
+        s.send("ack".encode())
+
+        # Execute commands waiting in the buffer
+        execute_commands(s, user_id, computer_id)
+
+        command_text = command_text + "/" + path
+
         if update == "Create":
-            before_create(s, user_id, computer_id)
+            create(s, path)
+
         if update == "Move":
-            before_move(s, user_id, computer_id)
+            # Get the destination path as well
+            dst_path = s.recv(1024)
+            s.send("ack".encode())
+
+            move(path, dst_path)
+
+            # Add it to the command text
+            command_text = command_text + "/" + dst_path
+
         if update == "Modify":
-            pass
+            modify(s, path)
+
         if update == "Delete":
-            before_delete(s, user_id, computer_id)
+
+            # This recursive function will delete every file/sub-folder in this path.
+            delete(path)
+
+            # Eventually delete the folder since it's empty.
+            os.rmdir(os.path.join(os.getcwd(), path))
+
         if update == "Rename":
-            before_rename(s, user_id, computer_id)
+            # Getting the new name:
+            name = s.recv(1024)
+            s.send("ack".encode())
+
+            # Renaming the file/folder.
+            os.rename(path, name)
+
+        # Pushing the update to all computers:
+        for computer in users[user_id].keys():
+            if computer != computer_id:
+                users[user_id][computer].append(command_text)
 
 
 port = sys.argv[1]
@@ -244,7 +200,7 @@ data = ""
 origin_cwd = os.getcwd()
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('', 12347))
+server.bind(('', 12346))
 server.listen(5)
 while True:
     path = ""
@@ -266,7 +222,7 @@ while True:
         # This is the first computer - the id is 1
         computer_id = '1'
         # Creating new dict for the  commands - commands[0]=modify commands, commands[1]= the rest commands.
-        users[user_id][computer_id] = [{}, []]
+        users[user_id][computer_id] = []
         # Create the folder with the ID
         os.mkdir(user_id)
         # Sending an acknowledgment with the user_id and the computer_id
@@ -302,7 +258,7 @@ while True:
         # Get the computers id list, set the id of the new computer to length + 1.
         computer_id = str(len(users[data].keys()) + 1)
         # Creating new dict for the  commands - commands[0]=modify commands, commands[1]= the rest commands.
-        users[data][computer_id] = [{}, []]
+        users[data][computer_id] = []
         client_socket.send(computer_id.encode())  # Sending an acknowledgment.
         # Waiting for ack
         wait_for_ack(client_socket)

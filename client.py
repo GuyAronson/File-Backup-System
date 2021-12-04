@@ -51,20 +51,49 @@ def on_modified(event):
 
 def on_deleted(event):
     path = event.src_path
+    full_path = os.path.join(os.getcwd(), path)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((ip, 12345))
     s.send("Delete".encode())
     wait_for_ack(s)
     s.send((user_id+"/"+computer_id).encode())
     wait_for_ack(s)
-    s.send(path.encode())
 
+    # Checks if the path is a folder or a file.
+    if os.path.isdir(full_path):
+        s.send(("0" + path).encode())
+    elif os.path.isfile(full_path):
+        s.send(("1" + path).encode())
+    wait_for_ack(s)
+
+    execute_commands(s)
+
+def execute_commands(s):
+    command = ""
+    while command != "Done":
+        command = s.recv(BUFFER).decode()
+        path = s.recv(BUFFER).decode()
+
+        # might public the create/modify/move/delete function from server to util.
+        if command == "Create":
+            create(s, path)
+        if command == "Delete":
+            delete(path)
+        if command == "Move":
+            move(path)
+        if command == "Modify":
+            modify(s, path)
+        if command == "Rename":
+            # The path is divided to name and path - "Rename/name/path"
+            slash = path.find("/")
+            name = path[:slash]
+            os.rename(path[slash+1:], name)
 
 
 origin_cwd = os.getcwd()
 had_id = False
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client_socket.connect((ip, 12347))
+client_socket.connect((ip, 12346))
 
 if user_id != "":
     had_id = True
@@ -116,9 +145,9 @@ else:
     observer.schedule(event_handler, directory, recursive=True)
 observer.start()
 
-# while True:
-#     try:
-#         pass
-#     except KeyboardInterrupt:
-#         observer.stop()
-#         observer.join()
+while True:
+    try:
+        pass
+    except KeyboardInterrupt:
+        observer.stop()
+        observer.join()

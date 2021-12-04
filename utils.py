@@ -2,10 +2,8 @@ import socket
 import string
 import os
 
-# 2^12 is the buffer bytes.
-BIG_BUFFER = 8192
 # 2^10 is the small buffer bytes.
-SMALL_BUFFER = 1024
+BUFFER = 1024
 DONE = "Done Folder"
 
 
@@ -17,62 +15,56 @@ def wait_for_ack(s):
 
 # Function to recieve a single file.
 def recv_file(file_dir, client_socket):
-    data = b'0'
+    data = b''
+    # initializing a byte array for the file's bytes
+    bytes = bytearray()
+    # Getting the file size
     file_size = int.from_bytes(client_socket.recv(10), 'big')
-    print("recieve file_size" + str(file_size))
     client_socket.send("ack".encode())
     # Open the file.
     file = open(file_dir, 'wb')
-    #with open(file_dir, mode='wb', errors='ignore') as file:
-    count = file_size / BIG_BUFFER
-    while file_size >= BIG_BUFFER:
-        print("Segment " + str(count) + "  file_size: " + str(file_size))
-        count -= 1
-        # Getting the whole file.
-        data = client_socket.recv(BIG_BUFFER)
-        file.write(data)
-        file_size = file_size - BIG_BUFFER
-    print("Should finish...")
 
-    if file_size > 0:
-        print("Segment " + str(count) + "  file_size: " + str(file_size))
-        data = client_socket.recv(BIG_BUFFER)
-        file.write(data)
-    print("Done")
-    print("Data: " + data.decode())
-    file.close()
+    # Looping while the file_size is bigger than the length of the bytes we recieved.
+    while file_size > len(bytes):
+        # trying to receive the rest of the bytes left.
+        data = client_socket.recv(file_size - len(bytes))
+        # If we didn't receive any data, we can exit the loop
+        if len(data) == 0:
+            break
+        # Add the data to the bytes array.
+        bytes.extend(data)
+    # Eventually writing all the bytes into the file.
+    file.write(bytes)
+
+    # Double ack to make sure everything worked.
     client_socket.send("ack".encode())
     wait_for_ack(client_socket)
-    print("Acked. ")
+    file.close()
 
 
 def send_file(directory, s):
     # Get the file size in bytes
     file_size = os.path.getsize(directory)
-    print("sent file_size " + str(file_size))
     # Send the size of the file to the server
     bytes = file_size.to_bytes(10, 'big')
     s.send(bytes)
     wait_for_ack(s)
     # Open & read the file
     file = open(directory, 'rb')
-    count = file_size / BIG_BUFFER
-    while file_size >= BIG_BUFFER:
-        print("Segment " + str(count) + "  file_size: " + str(file_size))
-        count -= 1
-        data = file.read(BIG_BUFFER)
-        s.send(data)
-        file_size = file_size - BIG_BUFFER
 
-    if file_size > 0:
-        print("Segment " + str(count) + "  file_size: " + str(file_size))
-        data = file.read(BIG_BUFFER)
+    # Looping while there are bytes left to read.
+    while file_size > 0:
+        # Trying to read what left from the file.
+        data = file.read(file_size)
+        # Sending the segment we read.
         s.send(data)
+        # the data left to read is smaller.
+        file_size = file_size - len(data)
 
-    file.close()
+    # Double ack.
     wait_for_ack(s)
     s.send("ack".encode())
-    print("Acked. ")
+    file.close()
 
 
 # Function to recieve a folder and its sub-directories.
@@ -81,8 +73,7 @@ def recv_folder(client_socket):
     # Saving the original working directory.
     cwd = os.getcwd()
     # First, recieve relative root directory .
-    data = client_socket.recv(SMALL_BUFFER).decode()
-    print("directory: " + data)
+    data = client_socket.recv(BUFFER).decode()
     client_socket.send("ack".encode())
     dir_name = os.path.join(cwd, data[1:])
     while data != DONE:
@@ -93,8 +84,7 @@ def recv_folder(client_socket):
         os.chdir(dir_name)
 
         # Getting the first file/folder relative directory.
-        data = client_socket.recv(SMALL_BUFFER).decode()
-        print("directory: " + data)
+        data = client_socket.recv(BUFFER).decode()
         client_socket.send(("ack").encode())
         data = data.rstrip()
         data = data.lstrip()
@@ -111,8 +101,7 @@ def recv_folder(client_socket):
             # Getting the file.
             recv_file(dir_name, client_socket)
             # Getting the next file/folder realtive directory
-            data = (client_socket.recv(SMALL_BUFFER)).decode()
-            print("directory: " + data)
+            data = (client_socket.recv(BUFFER)).decode()
             if data != DONE:
                 client_socket.send(("ack").encode())
                 is_dir = int(data[0])
@@ -130,7 +119,6 @@ def send_folder(directory, s):
     for (root, dirs, files) in os.walk(os.getcwd(), topdown=True):
         # Sending the root directory.
         a = ("0" + root[start_relative_index + 1:])
-        print("directory: " + a)
         s.send(a.encode())
         wait_for_ack(s)
 
@@ -140,16 +128,8 @@ def send_folder(directory, s):
             file_dir = os.path.join(root, file)
             # Sending the relative file directory to the server.
             s.send(("1" + relative_file_dir).encode())
-            print("directory: " + relative_file_dir)
             wait_for_ack(s)
             send_file(file_dir, s)
     s.send(DONE.encode())
 
-# todo When a change in the client folder has been made - we need to notify to the server.
-# The server need to distinguish which change is it - Send a package with the change's name
-# modify/create/delete/move
-# todo - the server needs to complete the same change.
-# todo - then the server needs to do the changes in the other computers in the same id.
-# the server does the change only when a computer logs in,
-# and save the change for the other computers when they log in.
-# The server will hold the changes to do per computer in a specific buffer per computer.
+
