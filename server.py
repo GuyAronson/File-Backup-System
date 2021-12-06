@@ -49,7 +49,7 @@ def check_for_updates(update, s):
     user_id = data[:i]
     computer_id = data[i + 1:]
 
-    # Getting the path - the first byte is the dir's type.
+    # Getting the path - the first byte is the dir's type. (0/1)
     path = s.recv(BUFFER).decode()
     s.send(ACK)
 
@@ -77,7 +77,8 @@ def check_for_updates(update, s):
         new_dst_path = os.path.join(user_id, dst_path)
 
         move(path, new_dst_path)
-
+        if os.path.exists(os.path.join(os.getcwd(), path)):
+            os.rmdir(os.path.join(os.getcwd(), path))
         # Add it to the command text
         command_text = command_text + "$" + dst_path
 
@@ -96,11 +97,13 @@ def check_for_updates(update, s):
 
     if update == "Rename":
         # Getting the new name:
-        name = s.recv(BUFFER).decode()
+        name_path = os.path.join(user_id, s.recv(BUFFER).decode())
         s.send(ACK)
 
+        print(path)
+
         # Renaming the file/folder.
-        os.rename(path, name)
+        os.rename(path[1:], name_path)
 
     # Pushing the update to all computers:
     for computer in users[user_id].keys():
@@ -184,7 +187,11 @@ while True:
             client_socket.send(computer_id.encode())  # Sending an acknowledgment.
             # Waiting for ack
             wait_for_ack(client_socket)
-            send_folder(os.path.join(os.getcwd(), user_id), client_socket)
+            # Sending the folder saved in the server:
+            # Get the saved directory in the server.
+            saved_dir = os.listdir(os.path.join(os.getcwd(), user_id))[0]
+            # Send the folder in the server to the client
+            send_folder(os.path.join(user_id, saved_dir), client_socket)
 
     client_socket.close()
     os.chdir(origin_cwd)

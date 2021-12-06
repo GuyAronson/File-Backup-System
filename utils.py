@@ -224,18 +224,19 @@ def move(src_path, dst_path):
         # Looping over the items
         for dir in list_dirs:
             # Creating the full path of the item.
-            dir_path = os.path.join(full_src_path, dir)
+            src_dir_path = os.path.join(full_src_path, dir)
+            dst_dir_path = os.path.join(full_dst_path, dir)
             # If it is a file - call move_file - will delete the file in the end of the func.
-            if os.path.isfile(dir_path):
-                move_file(full_src_path, full_dst_path)
+            if os.path.isfile(src_dir_path):
+                move_file(src_dir_path, dst_dir_path)
             # If it's a folder - recursively get call move with the realtive paths.
-            elif os.path.isdir(dir_path):
+            elif os.path.isdir(src_dir_path):
                 # Create realtive paths
                 relative_src = os.path.join(src_path, dir)
                 relative_dst = os.path.join(dst_path, dir)
                 move(relative_src, relative_dst)
                 # Eventually - delete the folder, it must be empty after the recursion.
-                os.rmdir(os.path.join (full_src_path, dir))
+                os.rmdir(src_dir_path)
 
     # If the path is a file -  we will just call move_file
     # it will copy the file from src to dst, and will delete from the src.
