@@ -6,12 +6,14 @@ import watchdog.events
 from watchdog.events import FileSystemEventHandler
 from utils import *
 
+NULL = 0
 port = int(sys.argv[1])
 ip = sys.argv[2]
 directory = sys.argv[3]
 time_seconds = sys.argv[4]
 user_id = ""
 computer_id = ""
+updates_to_ignore = []
 if len(sys.argv) == 6:
     user_id = sys.argv[5]
 
@@ -19,6 +21,9 @@ if len(sys.argv) == 6:
 def setup_command(event, command):
     # The relative source path
     path = event.src_path
+
+    if (command + "$" + path) in updates_to_ignore:
+        return NULL
     # Create the full source path
     full_path = os.path.join(os.getcwd(), path)
 
@@ -35,10 +40,13 @@ def setup_command(event, command):
     wait_for_ack(s)
 
     # Checks if the path is a folder or a file - the sending
-    if os.path.isdir(full_path):
-        s.send(("0" + path).encode())
-    elif os.path.isfile(full_path):
-        s.send(("1" + path).encode())
+    if command == "Modify" or command == "Create":
+        if os.path.isdir(full_path):
+            s.send(("0" + path).encode())
+        elif os.path.isfile(full_path):
+            s.send(("1" + path).encode())
+    else:
+        s.send(path.encode())
     wait_for_ack(s)
 
     # Execute the commands waiting in the server for the client's computer.
@@ -65,6 +73,8 @@ def on_moved(event):
     # If an outputstream file occurs - we  need to call on_modified, a change in a file has been made. .
     if src_path.find(".goutputstream") != -1:
         socket = setup_command(event, "Modify")
+        if socket == 0:
+            return
         send_file(event.src_path, socket)
         return
 
@@ -86,7 +96,7 @@ def on_created(event):
 
     socket = setup_command(event, "Create")
     # If a file has been created, the content needs to be sent by the client.
-    if os.path.isfile(event.src_path):
+    if socket != 0 and os.path.isfile(event.src_path):
         send_file(os.path.join(os.getcwd(), event.src_path), socket)
 
 
@@ -108,32 +118,41 @@ def execute_commands(s):
         # The path is relative.
         path = s.recv(BUFFER).decode()
         s.send(ACK)
+
         # might public the create/modify/move/delete function from server to util.
         if command == "Create":
+            # Adding an update to ignore when the watchdog monitor it.
+            updates_to_ignore.append(command + "$" + path[1:])
             create(s, path)
-        if command == "Delete":
-            is_dir = int(path[0])
-            path = path[1:]
+        elif command == "Delete":
+            # Adding an update to ignore when the watchdog monitor it.
+            updates_to_ignore.append(command + "$" + path)
             # This recursive function will delete every file/sub-folder in this path.
             delete(path)
 
             # Eventually delete the folder since it's empty.
-            if is_dir == 0:
+            if os.path.isdir(os.path.join(os.getcwd(), path)):
                 os.rmdir(os.path.join(os.getcwd(), path))
 
-        if command == "Move":
+        elif command == "Move":
             # path = "0src_path/dst_path"
             dollar = path.find("$")
-            src_path = path[1:dollar]  # src path starts after the type (0/1) till the slash.
+            src_path = path[:dollar]  # src path starts after the type (0/1) till the slash.
             dst_path = path[dollar + 1:]  # dst path starts after the slash.
             move(src_path, dst_path)
-        if command == "Modify":
+
+        elif command == "Modify":
+            # Adding an update to ignore when the watchdog monitor it.
+            updates_to_ignore.append(command + "$" + path[1:])
             modify(s, path)
-        if command == "Rename":
+        elif command == "Rename":
+            # Adding an update to ignore when the watchdog monitor it.
+            updates_to_ignore.append(command + "$" + path)
+
             # The path is divided to name and path - "name/0path"
             dollar = path.find("$")
             name = path[:dollar]
-            os.rename(path[dollar + 2:], name)
+            os.rename(path[dollar + 1:], name)
 
         command = s.recv(BUFFER).decode()
         s.send(ACK)
@@ -188,10 +207,8 @@ event_handler.on_moved = on_moved
 event_handler.on_created = on_created
 event_handler.on_modified = on_modified
 event_handler.on_deleted = on_deleted
-if had_id:
-    observer.schedule(event_handler, user_id, recursive=True)
-else:
-    observer.schedule(event_handler, directory, recursive=True)
+
+observer.schedule(event_handler, directory, recursive=True)
 observer.start()
 
 while True:

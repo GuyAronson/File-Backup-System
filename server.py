@@ -35,6 +35,7 @@ def execute_commands(s, usr_id, cmp_id):
 
     # All updates have been sent, the client can stop.
     s.send("Done".encode())
+    wait_for_ack(s)
 
 def check_for_updates(update, s):
     command_text = update
@@ -55,20 +56,20 @@ def check_for_updates(update, s):
 
     command_text = command_text + "$" + path
 
-    # Changing the path to be realtive for the server with the type:
-    is_dir = path[0]
-    path = os.path.join(user_id, path[1:])
-    path = is_dir + path
+
 
     # Execute commands waiting in the buffer
     execute_commands(s, user_id, computer_id)
 
     if update == "Create":
+        # Changing the path to be realtive for the server with the type:
+        is_dir = path[0]
+        path = os.path.join(user_id, path[1:])
+        path = is_dir + path
         create(s, path)
 
-    if update == "Move":
-        # Deleting the type - irrelevant.
-        path = path[1:]
+    elif update == "Move":
+        path = os.path.join(user_id, path)
 
         # Get the destination path as well
         dst_path = s.recv(BUFFER).decode()
@@ -82,28 +83,31 @@ def check_for_updates(update, s):
         # Add it to the command text
         command_text = command_text + "$" + dst_path
 
-    if update == "Modify":
+    elif update == "Modify":
+        # Changing the path to be realtive for the server with the type:
+        is_dir = path[0]
+        path = os.path.join(user_id, path[1:])
+        path = is_dir + path
         modify(s, path)
 
-    if update == "Delete":
-        is_dir = int(path[0])
-        path = path[1:]
+    elif update == "Delete":
+        path = os.path.join(user_id, path)
         # This recursive function will delete every file/sub-folder in this path.
         delete(path)
 
         # Eventually delete the folder since it's empty.
-        if is_dir == 0:
+        if os.path.isdir(os.path.join(os.getcwd(), path)):
             os.rmdir(os.path.join(os.getcwd(), path))
 
-    if update == "Rename":
+    elif update == "Rename":
         # Getting the new name:
         name_path = os.path.join(user_id, s.recv(BUFFER).decode())
         s.send(ACK)
 
-        print(path)
+        path = os.path.join(user_id, path)
 
         # Renaming the file/folder.
-        os.rename(path[1:], name_path)
+        os.rename(path, name_path)
 
     # Pushing the update to all computers:
     for computer in users[user_id].keys():
@@ -196,3 +200,9 @@ while True:
     client_socket.close()
     os.chdir(origin_cwd)
     print('Client disconnected')
+    if user_id != '':
+        client = users[user_id]
+        items = client.items()
+        for item in items:
+            print(item)
+    print()
