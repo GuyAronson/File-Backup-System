@@ -3,6 +3,7 @@ import sys
 import os
 from watchdog.observers import Observer
 import watchdog.events
+import time
 from watchdog.events import FileSystemEventHandler
 from utils import *
 
@@ -19,10 +20,16 @@ if len(sys.argv) == 6:
 
 
 def setup_command(event, command):
-    # The relative source path
-    path = event.src_path
+    # the src path is outputstream, so we need the dst path.
+    if command == "Modify":
+        path = event.dest_path
+    else:
+        # The relative source path
+        path = event.src_path
 
     if (command + "$" + path) in updates_to_ignore:
+        # Deleting the update.
+        updates_to_ignore.remove((command + "$" + path))
         return NULL
     # Create the full source path
     full_path = os.path.join(os.getcwd(), path)
@@ -53,7 +60,7 @@ def setup_command(event, command):
     execute_commands(s)
 
     if command == "Move" or command == "Rename":
-        s.send(event.dst_path.encode())
+        s.send(event.dest_path.encode())
         wait_for_ack(s)
 
     # Return the socket
@@ -62,7 +69,7 @@ def setup_command(event, command):
 
 def on_moved(event):
     src_path = event.src_path
-    dst_path = event.dst_path
+    dst_path = event.dest_path
 
     # Need to check if the event is really a move event:
     # If the source path exists:
@@ -121,9 +128,10 @@ def execute_commands(s):
 
         # might public the create/modify/move/delete function from server to util.
         if command == "Create":
-            # Adding an update to ignore when the watchdog monitor it.
+            # Adding an update to ignore when the watchdog monitor it - without the first byte of the type.
             updates_to_ignore.append(command + "$" + path[1:])
             create(s, path)
+
         elif command == "Delete":
             # Adding an update to ignore when the watchdog monitor it.
             updates_to_ignore.append(command + "$" + path)
@@ -135,25 +143,29 @@ def execute_commands(s):
                 os.rmdir(os.path.join(os.getcwd(), path))
 
         elif command == "Move":
-            # path = "0src_path/dst_path"
+            # Adding an update to ignore when the watchdog monitor it.
+            updates_to_ignore.append(command + "$" + path)
+
             dollar = path.find("$")
             src_path = path[:dollar]  # src path starts after the type (0/1) till the slash.
             dst_path = path[dollar + 1:]  # dst path starts after the slash.
             move(src_path, dst_path)
 
         elif command == "Modify":
-            # Adding an update to ignore when the watchdog monitor it.
+            # Adding an update to ignore when the watchdog monitor it - without the first byte of the type.
             updates_to_ignore.append(command + "$" + path[1:])
             modify(s, path)
+
         elif command == "Rename":
             # Adding an update to ignore when the watchdog monitor it.
             updates_to_ignore.append(command + "$" + path)
 
-            # The path is divided to name and path - "name/0path"
+            # The path is divided to name and path - "name$path"
             dollar = path.find("$")
-            name = path[:dollar]
-            os.rename(path[dollar + 1:], name)
+            name_path = path[:dollar]
+            os.rename(path[dollar + 1:], name_path)
 
+        # Next command.
         command = s.recv(BUFFER).decode()
         s.send(ACK)
 
@@ -210,10 +222,16 @@ event_handler.on_deleted = on_deleted
 
 observer.schedule(event_handler, directory, recursive=True)
 observer.start()
-
+time_start = time.time()
+time_end = time.time()
 while True:
     try:
-        pass
+        if time_end - time_start == time_seconds:
+            # In this function we will ask an update from the server.
+            # And will initiate the time_start again.
+            request_an_update()
+
+        time_end = time.time()
     except KeyboardInterrupt:
         observer.stop()
         observer.join()
