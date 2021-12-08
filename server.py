@@ -5,6 +5,7 @@ import string
 import sys
 from utils import *
 
+
 def execute_commands(s, usr_id, cmp_id):
     # List of updates for the computer.
     updates = users[usr_id][cmp_id]
@@ -37,7 +38,13 @@ def execute_commands(s, usr_id, cmp_id):
     s.send("Done".encode())
     wait_for_ack(s)
 
+
 def check_for_updates(update, s):
+    # If the client requests an update.
+    if update == "Update":
+        send_an_update(s)
+        return
+
     command_text = update
 
     # Ack for receiving the update
@@ -52,11 +59,16 @@ def check_for_updates(update, s):
 
     # Getting the path - the first byte is the dir's type. (0/1)
     path = s.recv(BUFFER).decode()
-    s.send(ACK)
+    if update == "Move":
+        # If the src path is not exist, we ignore the update.
+        if not os.path.exists(os.path.join(os.getcwd(), user_id, path)):
+            s.send("ign".encode())
+            return
+        s.send(ACK)
+    else:
+        s.send(ACK)
 
     command_text = command_text + "$" + path
-
-
 
     # Execute commands waiting in the buffer
     execute_commands(s, user_id, computer_id)
@@ -115,7 +127,23 @@ def check_for_updates(update, s):
             users[user_id][computer].append(command_text)
 
 
-port = sys.argv[1]
+def send_an_update(s):
+    # Ack for receiving the update
+    s.send(ACK)
+
+    # Get the ids:
+    data = s.recv(BUFFER).decode()
+    s.send(ACK)
+    i = data.rfind("/")
+    user_id = data[:i]
+    computer_id = data[i + 1:]
+
+    # Execute commands waiting in the buffer
+    execute_commands(s, user_id, computer_id)
+
+port = 12345
+#port = sys.argv[1]
+
 # Dictionary - its key is the id and the value is another dict of computers & list of commands.
 users = {}
 
@@ -123,10 +151,10 @@ path = ""
 user_id = ""
 data = ""
 origin_cwd = os.getcwd()
-commands = ["Create", "Move", "Modify", "Delete", "Rename"]
+commands = ["Create", "Move", "Modify", "Delete", "Rename", "Update"]
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(('', 12345))
+server.bind(('', port))
 server.listen(5)
 while True:
     path = ""
@@ -200,9 +228,3 @@ while True:
     client_socket.close()
     os.chdir(origin_cwd)
     print('Client disconnected')
-    if user_id != '':
-        client = users[user_id]
-        items = client.items()
-        for item in items:
-            print(item)
-    print()

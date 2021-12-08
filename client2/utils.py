@@ -3,15 +3,21 @@ import string
 import os
 
 # 2^10 is the small buffer bytes.
+
+
 BUFFER = 1024
 DONE = "Done Folder"
 ACK = "ack".encode()
+
 
 # Function that makes the program wait for ack in a loop.
 def wait_for_ack(s):
     data = "0"
     while data != "ack":
+        if data == "ign":
+            return "ignore"
         data = s.recv(3).decode()
+
 
 # Function to recieve a single file - file_dir is a full directory
 def recv_file(file_dir, client_socket):
@@ -40,6 +46,7 @@ def recv_file(file_dir, client_socket):
     client_socket.send(ACK)
     wait_for_ack(client_socket)
     file.close()
+
 
 # Function to receive a single file - directory is a full directory
 def send_file(directory, s):
@@ -108,6 +115,7 @@ def recv_folder(client_socket):
             else:
                 is_dir = 0
 
+
 # Function to send a folder and its sub-folders.
 # directory is a full dir.
 def send_folder(directory, s):
@@ -132,6 +140,7 @@ def send_folder(directory, s):
             send_file(file_dir, s)
     s.send(DONE.encode())
 
+
 # function to create a folder/file - path is a full directory
 def create(s, path):
     # if is_dir = 0 , it;s a directory, if is_dir =1 it's a file.
@@ -142,8 +151,8 @@ def create(s, path):
     if is_dir == '1':
         recv_file(full_dir, s)
     elif is_dir == '0':
-        # todo - Need to make sure the server current working directory (cwd) is in the ID folder.
         os.mkdir(full_dir)
+
 
 # Execute the modify command - needs to receive the bytes to modify.
 # Path is a full directory
@@ -151,6 +160,7 @@ def modify(s, path):
     # Get the full path - must be a file.
     full_path = os.path.join(os.getcwd(), path[1:])
     recv_file(full_path, s)
+
 
 # Function to recursively delete a folder  - path is a full directory
 def delete(path):
@@ -183,6 +193,7 @@ def delete(path):
         delete(full_folder_path)
         os.rmdir(full_folder_path)
 
+
 # function to move a specific file from src to dst path.
 def move_file(full_src_path, full_dst_path):
     src_file = open(full_src_path, 'rb')
@@ -205,6 +216,7 @@ def move_file(full_src_path, full_dst_path):
 
     # Removing the source file.
     os.remove(full_src_path)
+
 
 # function to recursively move an entire folder.
 def move(src_path, dst_path):
@@ -243,3 +255,72 @@ def move(src_path, dst_path):
     elif os.path.isfile(full_src_path):
         move_file(full_src_path, full_dst_path)
 
+
+# Adding all updates to the list - with 1 path.
+def add_all_updates(updates, command, path):
+    # path is a relative path.
+    full_path = os.path.join(os.getcwd(), path)
+
+    # Checks if the path is a file
+    if os.path.isfile(full_path):
+        # Updating the ignored updates list in the client
+        updates.append(command + "$" + path)
+        return
+
+    # Creating list of all items within the given folder.
+    list_dirs = os.listdir(full_path)
+
+    # Checks if the folder is empty
+    if len(list_dirs) == 0:
+        # Updating the ignored updates list in the client
+        updates.append(command + "$" + path)
+        return
+
+    # Running on all files/folders in the folder.
+    for dir in list_dirs:
+
+        # Add the update to the updates list.
+        updates.append(command + "$" + os.path.join(path, dir))
+
+        # Creating full directory for the dir.
+        full_dir_path = os.path.join(full_path, dir)
+
+        # If it's a folder, we run recrursively on its sub-directories.
+        if os.path.isdir(full_dir_path):
+            add_all_updates(updates, command, os.path.join(path, dir))
+
+
+# Overloading -
+# Adding all updates to the list - with 2 paths.
+def add_all_updates(updates, command, src_path, dst_path):
+    # the paths are a relative path.
+    full_src_path = os.path.join(os.getcwd(), src_path)
+    full_dst_path = os.path.join(os.getcwd(), dst_path)
+
+    # Checks if the src_path is a file
+    if os.path.isfile(full_src_path):
+        # Updating the ignored updates list in the client
+        updates.append(command + "$" + src_path + "$" + dst_path)
+        return
+
+    # Creating list of all items within the given folder.
+    list_dirs = os.listdir(full_src_path)
+
+    # Checks if the folder is empty
+    if len(list_dirs) == 0:
+        # Updating the ignored updates list in the client
+        updates.append(command + "$" + src_path + "$" + dst_path)
+        return
+
+    # Running on all files/folders in the folder.
+    for dir in list_dirs:
+
+        # Add the update to the updates list.
+        updates.append(command + "$" + os.path.join(src_path, dir) + "$" + os.path.join(dst_path, dir))
+
+        # Creating full directory for the dir.
+        full_src_dir_path = os.path.join(full_src_path, dir)
+
+        # If it's a folder, we run recrursively on its sub-directories.
+        if os.path.isdir(full_src_dir_path):
+            add_all_updates(updates, command, os.path.join(src_path, dir), os.path.join(dst_path, dir))

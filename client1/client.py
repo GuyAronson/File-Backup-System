@@ -8,18 +8,34 @@ from watchdog.events import FileSystemEventHandler
 from utils import *
 
 NULL = 0
-port = int(sys.argv[1])
+#port = int(sys.argv[1])
+port = 12345
 ip = sys.argv[2]
 directory = sys.argv[3]
-time_seconds = sys.argv[4]
+time_seconds = float(sys.argv[4])
 user_id = ""
 computer_id = ""
 updates_to_ignore = []
 if len(sys.argv) == 6:
     user_id = sys.argv[5]
 
+def request_an_update():
+    # Create a socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((ip, port))
+
+    # Sending the command to the server.
+    s.send("Update".encode())
+    wait_for_ack(s)
+
+    # Sending the user and computer ids.
+    s.send((user_id + "/" + computer_id).encode())
+    wait_for_ack(s)
+
+    execute_commands(s)
 
 def setup_command(event, command):
+
     # the src path is outputstream, so we need the dst path.
     if command == "Modify":
         path = event.dest_path
@@ -31,12 +47,13 @@ def setup_command(event, command):
         # Deleting the update.
         updates_to_ignore.remove((command + "$" + path))
         return NULL
+
     # Create the full source path
     full_path = os.path.join(os.getcwd(), path)
 
     # Create a socket
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((ip, 12345))
+    s.connect((ip, port))
 
     # Sending the command to the server.
     s.send(command.encode())
@@ -54,7 +71,12 @@ def setup_command(event, command):
             s.send(("1" + path).encode())
     else:
         s.send(path.encode())
-    wait_for_ack(s)
+
+    x = wait_for_ack(s)
+    # Check if we need to ignore the update.
+    if x == "ignore":
+        return NULL
+
 
     # Execute the commands waiting in the server for the client's computer.
     execute_commands(s)
@@ -70,12 +92,6 @@ def setup_command(event, command):
 def on_moved(event):
     src_path = event.src_path
     dst_path = event.dest_path
-
-    # Need to check if the event is really a move event:
-    # If the source path exists:
-    if os.path.exists(os.path.join(os.getcwd(), src_path)):
-        socket = setup_command(event, "Move")
-        return
 
     # If an outputstream file occurs - we  need to call on_modified, a change in a file has been made. .
     if src_path.find(".goutputstream") != -1:
@@ -94,6 +110,12 @@ def on_moved(event):
     # and the other paths are equal (till the last slash)
     if src_path[:src_i] == dst_path[:dst_i] and src_path[src_i + 1:] != dst_path[dst_i + 1:]:
         setup_command(event, "Rename")
+
+    # Need to check if the event is really a move event:
+    # If the source path exists:
+    if os.path.exists(os.path.join(os.getcwd(), dst_path)):
+        setup_command(event, "Move")
+        return
 
 
 def on_created(event):
@@ -133,8 +155,9 @@ def execute_commands(s):
             create(s, path)
 
         elif command == "Delete":
-            # Adding an update to ignore when the watchdog monitor it.
-            updates_to_ignore.append(command + "$" + path)
+            # Adding all updates in the folder and its sub directories to ignore.
+            add_all_updates(updates_to_ignore, "Delete", path)
+
             # This recursive function will delete every file/sub-folder in this path.
             delete(path)
 
@@ -143,12 +166,14 @@ def execute_commands(s):
                 os.rmdir(os.path.join(os.getcwd(), path))
 
         elif command == "Move":
-            # Adding an update to ignore when the watchdog monitor it.
-            updates_to_ignore.append(command + "$" + path)
-
             dollar = path.find("$")
             src_path = path[:dollar]  # src path starts after the type (0/1) till the slash.
             dst_path = path[dollar + 1:]  # dst path starts after the slash.
+
+            # Adding all updates in the folder and its sub directories to ignore.
+            add_all_updates(updates_to_ignore, "Move", src_path, dst_path)
+
+            # Then recursively move the folder and its sub- directories.
             move(src_path, dst_path)
 
         elif command == "Modify":
@@ -173,7 +198,7 @@ def execute_commands(s):
 origin_cwd = os.getcwd()
 had_id = False
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client_socket.connect((ip, 12345))
+client_socket.connect((ip, port))
 
 if user_id != "":
     had_id = True
@@ -222,16 +247,14 @@ event_handler.on_deleted = on_deleted
 
 observer.schedule(event_handler, directory, recursive=True)
 observer.start()
-time_start = time.time()
-time_end = time.time()
 while True:
     try:
-        if time_end - time_start == time_seconds:
-            # In this function we will ask an update from the server.
-            # And will initiate the time_start again.
-            request_an_update()
+        # Sending the client to sleep.
+        time.sleep(time_seconds)
 
-        time_end = time.time()
+        #If the watch dog didn't interrupted the client needs to request an update
+       # request_an_update()
+
     except KeyboardInterrupt:
         observer.stop()
         observer.join()
