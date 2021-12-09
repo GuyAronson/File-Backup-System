@@ -80,8 +80,6 @@ def check_for_updates(update, s):
     else:
         s.send(ACK)
 
-    print(user_id)
-    print(path)
     command_text = command_text + "$" + path
 
     # Execute commands waiting in the buffer
@@ -177,8 +175,8 @@ def send_an_update(s):
     # Execute commands waiting in the buffer
     execute_commands(s, user_id, computer_id)
 
-port = 12346
-#port = sys.argv[1]
+
+port = sys.argv[1]
 
 # Dictionary - its key is the id and the value is another dict of computers & list of commands.
 users = {}
@@ -202,7 +200,6 @@ while True:
     # For monitored Clients
     if data in commands:
         check_for_updates(data, client_socket)
-        print("Client " + computer_id + " : " + data + " , ", end='')
 
     # For first connection from a client - received an id or a directory to back up.
     else:
@@ -222,7 +219,7 @@ while True:
             # Sending an acknowledgment with the user_id and the computer_id
             client_socket.send((user_id + "/" + computer_id).encode())
             os.chdir(os.path.join(origin_cwd, user_id))  # Changing the current working directory
-            # print(os.getcwd())
+            
             is_dir = int(data[0])  # If the key is 0 - then it's a directory, if it's 1 then it's a file.
             path = data[1:]  # The relative directory with out the key.
             last_slash_index = path.rfind('/')
@@ -241,7 +238,6 @@ while True:
             elif is_dir == 1:
                 # create & backup file.
                 # Removing the existing file
-                print(os.getcwd())
                 if os.path.exists(dir_name):
                     os.remove(dir_name)
                 recv_file(dir_name, client_socket)
