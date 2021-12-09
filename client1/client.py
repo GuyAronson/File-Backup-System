@@ -9,7 +9,7 @@ from utils import *
 
 NULL = 0
 #port = int(sys.argv[1])
-port = 12345
+port = 12346
 ip = sys.argv[2]
 directory = sys.argv[3]
 time_seconds = float(sys.argv[4])
@@ -67,7 +67,7 @@ def setup_command(event, command):
     if command == "Modify" or command == "Create":
         if os.path.isdir(full_path):
             s.send(("0" + path).encode())
-        elif os.path.isfile(full_path):
+        else:
             s.send(("1" + path).encode())
     else:
         s.send(path.encode())
@@ -123,9 +123,15 @@ def on_created(event):
 
     socket = setup_command(event, "Create")
     # If a file has been created, the content needs to be sent by the client.
-    if socket != 0 and os.path.isfile(event.src_path):
-        send_file(os.path.join(os.getcwd(), event.src_path), socket)
-
+    if socket != 0:
+        if os.path.isfile(event.src_path):
+            send_file(os.path.join(os.getcwd(), event.src_path), socket)
+        elif os.path.isdir(event.src_path):
+            pass
+        else:
+            socket.send(int.to_bytes(0, 10, 'big'))
+            wait_for_ack(socket)
+            socket.send(ACK)
 
 def on_modified(event):
     pass
@@ -154,7 +160,7 @@ def execute_commands(s):
 
         elif command == "Delete":
             # Adding all updates in the folder and its sub directories to ignore.
-            add_all_updates(updates_to_ignore, "Delete", path)
+            add_all_delete_updates(updates_to_ignore, "Delete$", path)
 
             # This recursive function will delete every file/sub-folder in this path.
             delete(path)
@@ -169,7 +175,7 @@ def execute_commands(s):
             dst_path = path[dollar + 1:]  # dst path starts after the slash.
 
             # Adding all updates in the folder and its sub directories to ignore.
-            add_all_updates(updates_to_ignore, "Move", src_path, dst_path)
+            add_all_move_updates(updates_to_ignore, src_path, dst_path)
 
             # Then recursively move the folder and its sub- directories.
             move(src_path, dst_path)

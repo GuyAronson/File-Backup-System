@@ -9,14 +9,24 @@ from utils import *
 def execute_commands(s, usr_id, cmp_id):
     # List of updates for the computer.
     updates = users[usr_id][cmp_id]
+    # Copy list to run over.
+    updates_cpy = updates.copy()
 
     # Checks the updates list.
     if len(updates) != 0:
         # Looping over the updates.
-        for update in updates:
+        for update in updates_cpy:
             i = update.find("$")
             command = update[:i]
             _path = update[i + 1:]
+
+            if command == "Create" or command == "Modify":
+                p = os.path.join(os.getcwd(), usr_id, _path[1:])
+                # Checks if the path does not exist.
+                if not os.path.exists(p):
+                    users[usr_id][cmp_id].remove(update)
+                    continue
+
             # Send the command name
             s.send(command.encode())
             wait_for_ack(s)
@@ -27,7 +37,8 @@ def execute_commands(s, usr_id, cmp_id):
                 # Send the folder/file
                 is_dir = int(_path[0])
                 if is_dir == 1:
-                    send_file(_path[1:], s)
+                    p = os.path.join(os.getcwd(), usr_id, _path[1:])
+                    send_file(p, s)
             # If command is "Move" - the client needs to seperate the paths ###
 
             # Might need to send ack after every update. ####
@@ -59,6 +70,7 @@ def check_for_updates(update, s):
 
     # Getting the path - the first byte is the dir's type. (0/1)
     path = s.recv(BUFFER).decode()
+
     if update == "Move":
         # If the src path is not exist, we ignore the update.
         if not os.path.exists(os.path.join(os.getcwd(), user_id, path)):
@@ -68,6 +80,8 @@ def check_for_updates(update, s):
     else:
         s.send(ACK)
 
+    print(user_id)
+    print(path)
     command_text = command_text + "$" + path
 
     # Execute commands waiting in the buffer
@@ -104,6 +118,11 @@ def check_for_updates(update, s):
 
     elif update == "Delete":
         path = os.path.join(user_id, path)
+
+        #Checks if the file/folder to delete exist - otherwise it will be an error:
+        if not os.path.exists(os.path.join(os.getcwd(), path)):
+            return
+
         # This recursive function will delete every file/sub-folder in this path.
         delete(path)
 
@@ -115,13 +134,13 @@ def check_for_updates(update, s):
         # Getting the new name:
         name_path = os.path.join(user_id, s.recv(BUFFER).decode())
 
-        path = os.path.join(user_id, path)
+        full_path = os.path.join(user_id, path)
 
         # Checks if both paths are exist in the server:
-        if os.path.exists(os.path.join(os.getcwd(), path)) and os.path.exists(os.path.join(os.getcwd(), name_path)):
+        if os.path.exists(os.path.join(os.getcwd(), full_path)) and os.path.exists(os.path.join(os.getcwd(), name_path)):
             s.send("ign".encode())
             # Remove the system file from the server - since it should be modify command.
-            os.remove(os.path.join(os.getcwd(), path))
+            os.remove(os.path.join(os.getcwd(), full_path))
             return
 
         s.send(ACK)
@@ -149,14 +168,14 @@ def send_an_update(s):
     # Execute commands waiting in the buffer
     execute_commands(s, user_id, computer_id)
 
-port = 12345
+port = 12346
 #port = sys.argv[1]
 
 # Dictionary - its key is the id and the value is another dict of computers & list of commands.
 users = {}
-
 path = ""
 user_id = ""
+computer_id = "0"
 data = ""
 origin_cwd = os.getcwd()
 commands = ["Create", "Move", "Modify", "Delete", "Rename", "Update"]
@@ -174,7 +193,7 @@ while True:
     # For monitored Clients
     if data in commands:
         check_for_updates(data, client_socket)
-        print("Client "+ computer_id + " :" + data)
+        print("Client " + computer_id + " : " + data + " , ", end='')
 
     # For first connection from a client - received an id or a directory to back up.
     else:
@@ -233,7 +252,7 @@ while True:
             saved_dir = os.listdir(os.path.join(os.getcwd(), user_id))[0]
             # Send the folder in the server to the client
             send_folder(os.path.join(user_id, saved_dir), client_socket)
-
+        print(user_id)
     client_socket.close()
     os.chdir(origin_cwd)
     print('Client disconnected')

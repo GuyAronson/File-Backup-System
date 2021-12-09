@@ -257,14 +257,14 @@ def move(src_path, dst_path):
 
 
 # Adding all updates to the list - with 1 path.
-def add_all_updates(updates, command, path):
+def add_all_delete_updates(updates, path_prefix, path):
     # path is a relative path.
     full_path = os.path.join(os.getcwd(), path)
 
     # Checks if the path is a file
     if os.path.isfile(full_path):
         # Updating the ignored updates list in the client
-        updates.append(command + "$" + path)
+        updates.append(path_prefix+ path)
         return
 
     # Creating list of all items within the given folder.
@@ -273,26 +273,26 @@ def add_all_updates(updates, command, path):
     # Checks if the folder is empty
     if len(list_dirs) == 0:
         # Updating the ignored updates list in the client
-        updates.append(command + "$" + path)
+        updates.append(path_prefix+ path)
         return
 
     # Running on all files/folders in the folder.
     for dir in list_dirs:
 
         # Add the update to the updates list.
-        updates.append(command + "$" + os.path.join(path, dir))
+        updates.append(path_prefix + os.path.join(path, dir))
 
         # Creating full directory for the dir.
         full_dir_path = os.path.join(full_path, dir)
 
         # If it's a folder, we run recrursively on its sub-directories.
         if os.path.isdir(full_dir_path):
-            add_all_updates(updates, command, os.path.join(path, dir))
+            add_all_delete_updates(updates, path_prefix, os.path.join(path, dir))
 
 
 # Overloading -
 # Adding all updates to the list - with 2 paths.
-def add_all_updates(updates, command, src_path, dst_path):
+def add_all_move_updates(updates, src_path, dst_path):
     # the paths are a relative path.
     full_src_path = os.path.join(os.getcwd(), src_path)
     full_dst_path = os.path.join(os.getcwd(), dst_path)
@@ -300,7 +300,7 @@ def add_all_updates(updates, command, src_path, dst_path):
     # Checks if the src_path is a file
     if os.path.isfile(full_src_path):
         # Updating the ignored updates list in the client
-        updates.append(command + "$" + src_path + "$" + dst_path)
+        updates.append("Move$" + src_path + "$" + dst_path)
         return
 
     # Creating list of all items within the given folder.
@@ -309,18 +309,18 @@ def add_all_updates(updates, command, src_path, dst_path):
     # Checks if the folder is empty
     if len(list_dirs) == 0:
         # Updating the ignored updates list in the client
-        updates.append(command + "$" + src_path + "$" + dst_path)
+        updates.append("Move$" + src_path + "$" + dst_path)
         return
 
     # Running on all files/folders in the folder.
     for dir in list_dirs:
 
         # Add the update to the updates list.
-        updates.append(command + "$" + os.path.join(src_path, dir) + "$" + os.path.join(dst_path, dir))
+        updates.append("Move$" + os.path.join(src_path, dir) + "$" + os.path.join(dst_path, dir))
 
         # Creating full directory for the dir.
         full_src_dir_path = os.path.join(full_src_path, dir)
 
         # If it's a folder, we run recrursively on its sub-directories.
         if os.path.isdir(full_src_dir_path):
-            add_all_updates(updates, command, os.path.join(src_path, dir), os.path.join(dst_path, dir))
+            add_all_move_updates(updates, os.path.join(src_path, dir), os.path.join(dst_path, dir))

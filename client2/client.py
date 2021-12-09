@@ -9,7 +9,7 @@ from utils import *
 
 NULL = 0
 #port = int(sys.argv[1])
-port = 12345
+port = 12346
 ip = sys.argv[2]
 directory = sys.argv[3]
 time_seconds = float(sys.argv[4])
@@ -154,7 +154,7 @@ def execute_commands(s):
 
         elif command == "Delete":
             # Adding all updates in the folder and its sub directories to ignore.
-            add_all_updates(updates_to_ignore, "Delete", path)
+            add_all_delete_updates(updates_to_ignore, "Delete$", path)
 
             # This recursive function will delete every file/sub-folder in this path.
             delete(path)
@@ -169,7 +169,7 @@ def execute_commands(s):
             dst_path = path[dollar + 1:]  # dst path starts after the slash.
 
             # Adding all updates in the folder and its sub directories to ignore.
-            add_all_updates(updates_to_ignore, "Move", src_path, dst_path)
+            add_all_move_updates(updates_to_ignore, src_path, dst_path)
 
             # Then recursively move the folder and its sub- directories.
             move(src_path, dst_path)
