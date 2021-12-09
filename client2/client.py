@@ -43,10 +43,15 @@ def setup_command(event, command):
         # The relative source path
         path = event.src_path
 
-    if (command + "$" + path) in updates_to_ignore:
+    if command == "Move" or command == "Rename":
+        path_to_check = event.src_path + "$" +event.dest_path
+    else:
+        path_to_check = event.src_path
+
+    if (command + "$" + path_to_check) in updates_to_ignore:
         # Deleting the update.
-        updates_to_ignore.remove((command + "$" + path))
-        return NULL
+        updates_to_ignore.remove((command + "$" + path_to_check))
+        return None
 
     # Create the full source path
     full_path = os.path.join(os.getcwd(), path)
@@ -75,7 +80,7 @@ def setup_command(event, command):
     x = wait_for_ack(s)
     # Check if we need to ignore the update.
     if x == "ignore":
-        return NULL
+        return None
 
 
     # Execute the commands waiting in the server for the client's computer.
@@ -138,7 +143,6 @@ def on_deleted(event):
 
 
 def execute_commands(s):
-    command = ""
     command = s.recv(BUFFER).decode()
     s.send(ACK)
     while command != "Done":
@@ -153,6 +157,13 @@ def execute_commands(s):
             create(s, path)
 
         elif command == "Delete":
+            # Checks if the file/folder to delete exist - otherwise it will be an error:
+            if not os.path.exists(os.path.join(os.getcwd(), path)):
+                # Next command.
+                command = s.recv(BUFFER).decode()
+                s.send(ACK)
+                continue
+
             # Adding all updates in the folder and its sub directories to ignore.
             add_all_delete_updates(updates_to_ignore, "Delete$", path)
 
@@ -174,6 +185,9 @@ def execute_commands(s):
             # Then recursively move the folder and its sub- directories.
             move(src_path, dst_path)
 
+            # Removing the root folder.
+            os.rmdir(os.path.join(os.getcwd(), src_path))
+
         elif command == "Modify":
             # Adding an update to ignore when the watchdog monitor it - without the first byte of the type.
             updates_to_ignore.append(command + "$" + path[1:])
@@ -183,10 +197,10 @@ def execute_commands(s):
             # Adding an update to ignore when the watchdog monitor it.
             updates_to_ignore.append(command + "$" + path)
 
-            # The path is divided to name and path - "name$path"
+            # The path is divided to name and path - "path$name"
             dollar = path.find("$")
-            name_path = path[:dollar]
-            os.rename(path[dollar + 1:], name_path)
+            name_path = path[dollar + 1:]
+            os.rename(path[:dollar], name_path)
 
         # Next command.
         command = s.recv(BUFFER).decode()
@@ -251,7 +265,7 @@ while True:
         time.sleep(time_seconds)
 
         #If the watch dog didn't interrupted the client needs to request an update
-       # request_an_update()
+        request_an_update()
 
     except KeyboardInterrupt:
         observer.stop()

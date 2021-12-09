@@ -91,6 +91,11 @@ def check_for_updates(update, s):
         # Changing the path to be realtive for the server with the type:
         is_dir = path[0]
         path = os.path.join(user_id, path[1:])
+        if is_dir == '0':
+            p = os.path.join(os.getcwd(), path)
+            if os.path.exists(p):
+                return
+
         path = is_dir + path
         create(s, path)
 
@@ -131,8 +136,9 @@ def check_for_updates(update, s):
             os.rmdir(os.path.join(os.getcwd(), path))
 
     elif update == "Rename":
+        name = s.recv(BUFFER).decode()
         # Getting the new name:
-        name_path = os.path.join(user_id, s.recv(BUFFER).decode())
+        name_path = os.path.join(user_id, name)
 
         full_path = os.path.join(user_id, path)
 
@@ -143,9 +149,12 @@ def check_for_updates(update, s):
             os.remove(os.path.join(os.getcwd(), full_path))
             return
 
+        # Add it to the command text
+        command_text = command_text + "$" + name
+
         s.send(ACK)
         # Renaming the file/folder.
-        os.rename(path, name_path)
+        os.rename(full_path, name_path)
 
 
     # Pushing the update to all computers:
