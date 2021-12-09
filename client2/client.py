@@ -83,7 +83,11 @@ def setup_command(event, command):
 
     if command == "Move" or command == "Rename":
         s.send(event.dest_path.encode())
-        wait_for_ack(s)
+        x = wait_for_ack(s)
+
+        # Rename command didn't work - suppose to be modify.
+        if x == "ignore":
+            return 0
 
     # Return the socket
     return s
@@ -93,23 +97,20 @@ def on_moved(event):
     src_path = event.src_path
     dst_path = event.dest_path
 
-    # If an outputstream file occurs - we  need to call on_modified, a change in a file has been made. .
-    if src_path.find(".goutputstream") != -1:
-        socket = setup_command(event, "Modify")
-        if socket == 0:
-            return
-        send_file(event.src_path, socket)
-        return
-
     # check if the event is a rename event:
     src_i = src_path.rfind("/")
     dst_i = dst_path.rfind("/")
 
-    # The event is not move or modify
+    # The event is not move
     # If the last part of the paths are not equal,
     # and the other paths are equal (till the last slash)
     if src_path[:src_i] == dst_path[:dst_i] and src_path[src_i + 1:] != dst_path[dst_i + 1:]:
-        setup_command(event, "Rename")
+        s = setup_command(event, "Rename")
+        if s == 0:
+            # If rename didn't work - we sent a system file, and we need to send modify for the file changed.
+            socket = setup_command(event, "Modify")
+            send_file(os.path.join(os.getcwd(), dst_path), socket)
+        return
 
     # Need to check if the event is really a move event:
     # If the source path exists:
@@ -119,9 +120,6 @@ def on_moved(event):
 
 
 def on_created(event):
-    # Ignore outputstream files - it means a change has been made in a file.
-    if event.src_path.find(".goutputstream") != -1:
-        return
 
     socket = setup_command(event, "Create")
     # If a file has been created, the content needs to be sent by the client.

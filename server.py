@@ -114,12 +114,20 @@ def check_for_updates(update, s):
     elif update == "Rename":
         # Getting the new name:
         name_path = os.path.join(user_id, s.recv(BUFFER).decode())
-        s.send(ACK)
 
         path = os.path.join(user_id, path)
 
+        # Checks if both paths are exist in the server:
+        if os.path.exists(os.path.join(os.getcwd(), path)) and os.path.exists(os.path.join(os.getcwd(), name_path)):
+            s.send("ign".encode())
+            # Remove the system file from the server - since it should be modify command.
+            os.remove(os.path.join(os.getcwd(), path))
+            return
+
+        s.send(ACK)
         # Renaming the file/folder.
         os.rename(path, name_path)
+
 
     # Pushing the update to all computers:
     for computer in users[user_id].keys():
@@ -166,6 +174,7 @@ while True:
     # For monitored Clients
     if data in commands:
         check_for_updates(data, client_socket)
+        print("Client "+ computer_id + " :" + data)
 
     # For first connection from a client - received an id or a directory to back up.
     else:
@@ -228,3 +237,4 @@ while True:
     client_socket.close()
     os.chdir(origin_cwd)
     print('Client disconnected')
+
