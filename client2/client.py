@@ -128,7 +128,7 @@ def on_created(event):
 
     socket = setup_command(event, "Create")
     # If a file has been created, the content needs to be sent by the client.
-    if socket != 0 and os.path.isfile(event.src_path):
+    if socket != None and socket != 0 and os.path.isfile(event.src_path):
         send_file(os.path.join(os.getcwd(), event.src_path), socket)
 
 
