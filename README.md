@@ -1,10 +1,10 @@
-***A multi-device file backup system***
+# A multi-device file backup system
 
-The client tasks:
+**The client tasks:**
 * Detect a change in his files that has been made
 * Report to the server about the change
 
-The server tasks:
+**The server tasks:**
 * Backup all of the client files
 * Sync all of the client's devices
 
