@@ -1,4 +1,4 @@
-**A multi-device file backup system**
+***A multi-device file backup system***
 
 The client tasks:
 * Detect a change in his files that has been made
